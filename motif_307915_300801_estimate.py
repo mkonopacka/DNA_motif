@@ -25,7 +25,6 @@ k,w = X.shape
 def dtv(th, thB, th0, thB0):
     d = np.sum(np.abs(thB-thB0))
     for i in range(w):
-        print(f'{type(th0)} \n{th0}') # tu się coś psuje, th0 staje się listą
         d += np.sum(np.abs(th[:,i]-th0[:,i]))
     return d/(w+1)
 
@@ -98,7 +97,6 @@ def EM(Theta, ThetaB, alpha, estimate_alpha = False):
         ThetaB_new = ThetaB_new / lbd0
         Theta_new = Theta_new / lbd1    
         # Check if converges
-        print('INSIDE EM')
         if dtv(Theta_new, ThetaB_new, Theta, ThetaB) < h: break
 
     Theta = Theta_new
@@ -132,7 +130,6 @@ def run_experiment(w, init_opt, alpha, real_Theta, real_ThetaB, estimate_alpha =
             Theta, ThetaB = init_thetas(w, init_opt)
             best_Theta, best_ThetaB, est_alpha = Theta, ThetaB, alpha
             Theta, ThetaB, alpha = EM(Theta, ThetaB, alpha, estimate_alpha)
-            print('Inside init_opt == random!')
             new_dtv = dtv(Theta, ThetaB, real_Theta, real_ThetaB)
             dtvs.append(new_dtv)
             if new_dtv < best_dtv:
@@ -148,46 +145,40 @@ def run_experiment(w, init_opt, alpha, real_Theta, real_ThetaB, estimate_alpha =
         summary_method = {
             'random_dtv_min': min(dtvs),
             'random_dtv_avg': np.mean(dtvs),
-            'random_no_iterations': iter,
-            'best_random_Th0': best_Theta,
-            'best_random_ThB0': best_ThetaB}
+            'random_no_iterations': iter}
 
     summary = {
         'w': w,
         'init': init_opt,
         'real_alpha': alpha,
-        'est_Theta': est_Theta,
-        'est_ThetaB': est_ThetaB,
-        'est_alpha': est_alpha,
         'dtv': obtained_dtv
     }
-
-    return pd.DataFrame(data = {**summary, **summary_method})
+    return {**summary, **summary_method}, est_alpha, est_Theta, est_ThetaB
+    
             
 # %% Read real_params for results evaluation
 with open('params_set1.json', 'r') as real:
     real_data = json.load(real)
-    real_Theta = real_data['Theta']
-    real_ThetaB = real_data['ThetaB']
-    real_alpha = real_data['alpha']
+    real_Theta = np.array(real_data['Theta'])
+    real_ThetaB = np.array(real_data['ThetaB'])
+    real_alpha = np.array(real_data['alpha'])
 
 # %% Run experiment
-results = run_experiment(w, 'random', alpha, real_Theta, real_ThetaB, random_iter = 1)
+summary, est_a, est_Th, est_ThB = run_experiment(w, 'random', alpha, real_Theta, real_ThetaB, random_iter = 1)
 
 # %% Extract results and save output
-
 estimated_params = {
-    "alpha" : est_alpha,            # "przepisujemy" to alpha, one nie bylo estymowane 
-    "Theta" : est_Theta.tolist(),   # westymowane
-    "ThetaB" : est_ThetaB.tolist()  # westymowane
+    "alpha" : est_a,            # "przepisujemy" to alpha, one nie bylo estymowane 
+    "Theta" : est_Th.tolist(),   # westymowane
+    "ThetaB" : est_ThB.tolist()  # westymowane
     }
 
 with open(output_file, 'w') as outfile:
     json.dump(estimated_params, outfile)
     print(f'Results saved in {output_file}.')
-    
 
-# TODO ZAUTOMATYZOWAĆ TESTY DLA: 
-# podaję parametry (wygenerować je)
-# dla danego zestawu parametrów i sposobu losowania 
-# przeprowadza test kilka razy i wyciąga średnią z dtv
+# %% Create summary csv: 
+# w | init | real_a | est_a | dtv
+with open('summary.json', 'a') as f:
+    json.dump(summary,f)
+    print(f'Summary appended to summary.json')
