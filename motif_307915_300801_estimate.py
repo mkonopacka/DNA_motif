@@ -4,7 +4,7 @@ import numpy as np
 import argparse 
 import pandas as pd
 
-# %% Parse arguments
+# %% Define parser
 def ParseArguments():
     parser = argparse.ArgumentParser(description = "Motif generator")
     parser.add_argument('--input', default = "generated_data.json", required = False, help = 'Plik z danymi  (default: %(default)s)')
@@ -12,26 +12,22 @@ def ParseArguments():
     parser.add_argument('--estimate-alpha', default = "no", required=False, help = 'Czy estymowac alpha czy nie?  (default: %(default)s)')
     args, _ = parser.parse_known_args()
     return args.input, args.output, args.estimate_alpha
-    
-input_file, output_file, estimate_alpha = ParseArguments()
-with open(input_file, 'r') as inputfile:
-    data = json.load(inputfile)
- 
-alpha = data['alpha']
-X = np.asarray(data['X'])
-k,w = X.shape
 
 # %% Define dtv
 def dtv(th, thB, th0, thB0):
+    w = th.shape[1]
     d = np.sum(np.abs(thB-thB0))
     for i in range(w):
         d += np.sum(np.abs(th[:,i]-th0[:,i]))
     return d/(w+1)
 
 # %% Create initial distributions
-def init_thetas(w, opt = 'random', **kwargs):
-    '''Return Theta, ThetaB; w(int): length of a sequence
+def init_thetas(X, opt = 'random', **kwargs):
+    '''Return Theta, ThetaB;
+    X: data
     Theta: matrix 4 x w, ThetaB: vector of length w'''
+    k,w = X.shape
+
     if opt == 'random':
         ThetaB = np.zeros(4)
         ThetaB[:(4-1)]=np.random.rand(4-1)/4
@@ -48,7 +44,10 @@ def init_thetas(w, opt = 'random', **kwargs):
         Theta = np.full((4,w), 1/4)
         ThetaB = np.array([1/4,1/4,1/4,1/4])
         for j in range(w):
-            _, counts = np.unique(X[:,j], return_counts = True)
+            counts = np.array([0,0,0,0])
+            ls, cs = np.unique(X[:,j], return_counts = True)
+            for i in range(len(ls)):
+                counts[ls[i]-1] = cs[i]
             Theta[:,j] = counts / k
         ThetaB = np.mean(Theta, axis=1)
 
@@ -58,8 +57,10 @@ def init_thetas(w, opt = 'random', **kwargs):
     return Theta, ThetaB
 
 # %% Define EM
-def EM(Theta, ThetaB, alpha, estimate_alpha = False):
-    '''Theta, ThetaB, alpha: initial values (if estimate_alpha = True, alpha will be ignored)'''
+def EM(X, Theta, ThetaB, alpha, estimate_alpha):
+    '''X: data; Theta, ThetaB, alpha: initial values (if estimate_alpha = True, alpha will be ignored)'''
+    k,w = X.shape
+    
     # Initial values
     if estimate_alpha: 
         alpha = 0.5 
@@ -104,81 +105,52 @@ def EM(Theta, ThetaB, alpha, estimate_alpha = False):
     if estimate_alpha: alpha = alpha_new
 
     return Theta, ThetaB, alpha
+
 # %% Define experiment
-def run_experiment(w, init_opt, alpha, real_Theta, real_ThetaB, estimate_alpha = False, **kwargs):
+def run_experiment(X, init_opt, alpha, estimate_alpha, **kwargs):
     '''
-    Run experiment and return summary dtf containing of:
-        all passed arguments
-        obtained dtv
-        alpha_est - alpha_real difference
+    Run experiment and return estimated values and used parameters
 
     Arguments:
-        w: length of a sequence
-        real_*: real values of parameters used to evaluate results
+        X: data
         init_opt: random / uniform / mean (how to init values for EM?)
         estimate_alpha: if True, any passed alpha will be ignored and estimated
+    
     Accepted kwargs:
         random_iter: number of iterations in random init method
     '''
-    if init_opt == 'random': 
-        if not 'random_iter' in kwargs: raise ValueError('Unspecified number of iterations in random init method')
-        iter = kwargs['random_iter']
-        
-        for i in range(iter):
-            dtvs = []
-            best_dtv = float('inf')
-            Theta, ThetaB = init_thetas(w, init_opt)
-            best_Theta, best_ThetaB, est_alpha = Theta, ThetaB, alpha
-            Theta, ThetaB, alpha = EM(Theta, ThetaB, alpha, estimate_alpha)
-            new_dtv = dtv(Theta, ThetaB, real_Theta, real_ThetaB)
-            dtvs.append(new_dtv)
-            if new_dtv < best_dtv:
-                best_dtv = new_dtv
-                best_Theta = Theta
-                best_ThetaB = ThetaB
-                est_alpha = alpha
-        
-        obtained_dtv = best_dtv
-        est_Theta = best_Theta
-        est_ThetaB = best_ThetaB
-
-        summary_method = {
-            'random_dtv_min': min(dtvs),
-            'random_dtv_avg': np.mean(dtvs),
-            'random_no_iterations': iter}
-
-    summary = {
-        'w': w,
-        'init': init_opt,
-        'real_alpha': alpha,
-        'dtv': obtained_dtv
-    }
-    return {**summary, **summary_method}, est_alpha, est_Theta, est_ThetaB
+    k,w = X.shape
+    Theta, ThetaB = init_thetas(X, init_opt)
+    est_Theta, est_ThetaB, est_alpha = EM(X, Theta, ThetaB, alpha, estimate_alpha)
     
-            
-# %% Read real_params for results evaluation
-with open('params_set1.json', 'r') as real:
-    real_data = json.load(real)
-    real_Theta = np.array(real_data['Theta'])
-    real_ThetaB = np.array(real_data['ThetaB'])
-    real_alpha = np.array(real_data['alpha'])
+    params = {
+            'k': k,
+            'w': w,
+            'init': init_opt,
+            'est_alpha': estimate_alpha
+        }
 
-# %% Run experiment
-summary, est_a, est_Th, est_ThB = run_experiment(w, 'random', alpha, real_Theta, real_ThetaB, random_iter = 1)
+    return est_alpha, est_Theta, est_ThetaB, params
 
-# %% Extract results and save output
-estimated_params = {
-    "alpha" : est_a,            # "przepisujemy" to alpha, one nie bylo estymowane 
-    "Theta" : est_Th.tolist(),   # westymowane
-    "ThetaB" : est_ThB.tolist()  # westymowane
-    }
+# %% Program
+if __name__ == '__main__':   
+    input_file, output_file, estimate_alpha = ParseArguments()
+    with open(input_file, 'r') as inputfile:
+        data = json.load(inputfile)
+    
+    alpha = data['alpha']
+    X = np.asarray(data['X'])
 
-with open(output_file, 'w') as outfile:
-    json.dump(estimated_params, outfile)
-    print(f'Results saved in {output_file}.')
+    # Run experiment
+    est_a, est_Th, est_ThB, params = run_experiment(X, 'mean', alpha, estimate_alpha = True, random_iter = 1)
 
-# %% Create summary csv: 
-# w | init | real_a | est_a | dtv
-with open('summary.json', 'a') as f:
-    json.dump(summary,f)
-    print(f'Summary appended to summary.json')
+    # Extract results and save output
+    estimated_params = {
+        "alpha" : est_a,            
+        "Theta" : est_Th.tolist(),   
+        "ThetaB" : est_ThB.tolist()  
+        }
+
+    with open(output_file, 'w') as outfile:
+        json.dump(estimated_params, outfile)
+        print(f'Results saved in {output_file}.')
