@@ -32,9 +32,11 @@ def init_thetas(X, opt = 'random', **kwargs):
         ThetaB = np.zeros(4)
         ThetaB[:(4-1)]=np.random.rand(4-1)/4
         ThetaB[4-1]=1-np.sum(ThetaB)
+        
+        # each column add up to 1
         Theta = np.zeros((4,w))
-        Theta[:(w),:]=np.random.random((3,w))/w
-        Theta[w,:]=1-np.sum(Theta, axis=0)
+        Theta[0:3,:] = np.random.random((3,w))/w
+        Theta[3,:] = 1 - np.sum(Theta, axis=0)
 
     elif opt == 'uniform':
         Theta = np.full((4,w), 1/4)
@@ -54,28 +56,43 @@ def init_thetas(X, opt = 'random', **kwargs):
     else:
         raise ValueError(f'Invalid argument for function init_thetas: {opt}.\nPossible values: \'random\', \'uniform\', \'mean\'')
     
+    if np.isnan(Theta).any() or np.isnan(ThetaB).any():
+        raise ValueError
+    
     return Theta, ThetaB
 
 # %% Define EM
 def EM(X, Theta, ThetaB, alpha, estimate_alpha):
     '''X: data; Theta, ThetaB, alpha: initial values (if estimate_alpha = True, alpha will be ignored)'''
+    if np.isnan(Theta).any() or np.isnan(ThetaB).any():
+        raise ValueError
+    
     k,w = X.shape
     
     # Initial values
     if estimate_alpha: 
         alpha = 0.5 
-        alpha_new = alpha
 
     Theta_new = np.copy(Theta)
     ThetaB_new = np.copy(ThetaB)
+    if np.isnan(Theta_new).any() or np.isnan(ThetaB_new).any():
+        raise ValueError
 
-    Q = np.full((2,k), 0, dtype=float)
+    Q = np.full((2,k), 0, dtype = float)
     h = 0.00001 # convergence check treshold
 
     while True:
-        if estimate_alpha: alpha = alpha_new
+        if estimate_alpha: 
+            alpha_new = lbd1 / np.sum(Q[0] + Q[1])
+            # Prevent errors like true_division
+            if alpha_new == 0: alpha_new = 0.00001
+            elif alpha_new == 1: alpha_new = 0.99999
+        
         Theta = np.copy(Theta_new)
         ThetaB = np.copy(ThetaB_new)
+        if np.isnan(Theta).any() or np.isnan(ThetaB).any():
+            raise ValueError
+
         # Expectation Step
         Q[0] = (1-alpha)*np.prod(ThetaB[X-1], axis=1)
         Q[1] = alpha*np.prod(Theta[X-1,np.arange(w)], axis=1)
@@ -85,24 +102,39 @@ def EM(X, Theta, ThetaB, alpha, estimate_alpha):
         # Maximization step
         # Update alpha
         lbd1 = np.sum(Q[1])
-        if estimate_alpha: alpha_new = lbd1 / np.sum(Q[0] + Q[1])
+        if estimate_alpha: 
+            alpha_new = lbd1 / np.sum(Q[0] + Q[1])
+            # Prevent errors like true_division
+            if alpha_new == 0: alpha_new = 0.00001
+            elif alpha_new == 1: alpha_new = 0.99999
 
         # Update thetas
         for l in [1,2,3,4]:
             Xl = X == l
             ThetaB_new[l-1] = np.sum(Q[0]*np.sum(Xl, axis=1))
+            if np.isnan(ThetaB_new).any():
+                raise ValueError
             for j in range(w):
                 Theta_new[l-1,j] = np.sum(Q[1][Xl[:,j]])
+                if np.isnan(Theta_new).any():
+                    raise ValueError
         
         lbd0 = np.sum(ThetaB_new)
-        ThetaB_new = ThetaB_new / lbd0
-        Theta_new = Theta_new / lbd1    
+        try: 
+            ThetaB_new = ThetaB_new / lbd0
+        except Warning:
+            raise
+        try:
+            Theta_new = Theta_new / lbd1   
+        except Warning:
+            raise 
         # Check if converges
         if dtv(Theta_new, ThetaB_new, Theta, ThetaB) < h: break
 
     Theta = Theta_new
     ThetaB = ThetaB_new
-    if estimate_alpha: alpha = alpha_new
+    if estimate_alpha: 
+        alpha = alpha_new
 
     return Theta, ThetaB, alpha
 

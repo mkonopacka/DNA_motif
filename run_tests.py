@@ -7,10 +7,11 @@ from motif_307915_300801_estimate import *
 from json_save_params import *
 import pandas as pd
 from collections import OrderedDict
+import matplotlib.pyplot as plt
 
-def run_test(init_opt = 'mean', est_alpha = True, param_file = 'params_set.json'):
+def run_test(init_opt = 'mean', est_alpha = True, param_file = 'params_set.json', iterations = 100):
     print('New test started -------------------')
-    # 1. Read real data
+    # Read real data once
     print('Reading params from file ...')
     with open(param_file, 'r') as real:
         real_data = json.load(real)
@@ -18,25 +19,36 @@ def run_test(init_opt = 'mean', est_alpha = True, param_file = 'params_set.json'
         real_ThetaB = np.array(real_data['ThetaB'])
         real_alpha = np.array(real_data['alpha'])
     
-    # 2. Generate data from real params and save it in generated_data.json
-    generate_data(param_file, 'generated_data.json')
+    dtvs = []
+    alpha_difs = []
 
-    # 3. Run experiment on generated data
-    with open('generated_data.json', 'r') as inputfile:
-        data = json.load(inputfile)
+    for i in range(iterations):
+        # Generate data from real params and save it in generated_data.json
+        generate_data(param_file, 'generated_data.json')
 
-    X = np.asarray(data['X'])
+        # Run experiment on generated data
+        with open('generated_data.json', 'r') as inputfile:
+            data = json.load(inputfile)
 
-    est_a, est_Th, est_ThB, params = run_experiment(X, init_opt, real_alpha, estimate_alpha = est_alpha)
-    result = dtv(est_Th, est_ThB, real_Theta, real_ThetaB)
+        X = np.asarray(data['X'])
 
+        est_a, est_Th, est_ThB, params = run_experiment(X, init_opt, real_alpha, estimate_alpha = est_alpha)
+        result = dtv(est_Th, est_ThB, real_Theta, real_ThetaB)
+
+        # Append single result to results array
+        dtvs.append(result)
+        alpha_difs.append(est_a - real_alpha)
+        print(f'Iteration {i} ended with dtv: {result}.')
+
+    # Create averaged summary
     results_summary = {
-        'dtv': result,
-        'alpha_dif': est_a - real_alpha
+        'dtv': np.mean(dtvs),
+        'alpha_dif': np.mean(alpha_difs)
     }
 
     return {**params,**results_summary}
 
+# %%
 if __name__ == '__main__':
     # Test data: create some Theta (4 x w), ThetaB pairs
     # len(ThetaB) == Theta.shape[1]
@@ -46,17 +58,30 @@ if __name__ == '__main__':
         np.array([1/4,1/4,1/4,1/4]), 
         0
     )
-    Theta_pairs = [Thetas0]
+    Thetas1 = (
+        np.array([[0,1/8,1/8,6/8],[8/10,1/10,1/10,0],[1/7,3/7,3/7,0]]).T, 
+        np.array([1/4,1/4,1/4,1/4]), 
+        1
+    )
+    Thetas2 = (
+        np.hstack(tuple([Thetas0[0]] * 15)), 
+        np.array([1/4,1/4,1/4,1/4]), 
+        2
+    )
+    Theta_pairs = [Thetas0,Thetas1,Thetas2]
     
+    # Results file
+    results_f = 'results/test_results.csv'
+
     # Add csv results file header
-    with open('test_results.csv', 'a') as f:
+    with open(results_f, 'a') as f:
         f.write('k,w,init,est_alpha,dtv,alpha_dif,Thetas_ID\n')
     
     for pair in Theta_pairs:
         # different k
-        for k in [3,10,100,200,1000,2000]:
+        for k in [10, 30, 100, 1000, 2000]:
             # different alphas
-            for alpha in [0.1,0.3,0.5,0.7]:
+            for alpha in [0.1, 0,3, 0.5, 0.7, 0.9]:
                 # First create new params set
                 save_params_to_json(outfile = 'params_set.json', Theta = pair[0], ThetaB = pair[1], alpha = alpha, k = k)
                 # Then run test with generated params file
@@ -68,11 +93,10 @@ if __name__ == '__main__':
                         for key in result:
                             line += f'{result[key]},'
                         # Append result to test_results file
-                        with open('test_results.csv', 'a') as f:
+                        with open(results_f, 'a') as f:
                             f.write(line[:-1]+'\n')
 
-    # Convert to dataframe
-    dtf = pd.read_csv('test_results.csv')
-
 # %% Analyse results
-dtf.head()
+dtf = pd.read_csv('results/test_results.csv')
+print(dtf)
+# %%
