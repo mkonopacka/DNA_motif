@@ -72,6 +72,7 @@ def EM(X, Theta, ThetaB, alpha, estimate_alpha):
     # Initial values
     if estimate_alpha: 
         alpha = 0.5 
+        alpha_new = alpha
 
     Theta_new = np.copy(Theta)
     ThetaB_new = np.copy(ThetaB)
@@ -83,10 +84,7 @@ def EM(X, Theta, ThetaB, alpha, estimate_alpha):
 
     while True:
         if estimate_alpha: 
-            alpha_new = lbd1 / np.sum(Q[0] + Q[1])
-            # Prevent errors like true_division
-            if alpha_new == 0: alpha_new = 0.00001
-            elif alpha_new == 1: alpha_new = 0.99999
+            alpha = alpha_new
         
         Theta = np.copy(Theta_new)
         ThetaB = np.copy(ThetaB_new)
@@ -102,11 +100,15 @@ def EM(X, Theta, ThetaB, alpha, estimate_alpha):
         # Maximization step
         # Update alpha
         lbd1 = np.sum(Q[1])
+        #if lbd1 < 0.000001: break
         if estimate_alpha: 
             alpha_new = lbd1 / np.sum(Q[0] + Q[1])
+            if type(alpha_new) not in [float, np.float, np.float32, np.float64]:
+                print(type(alpha_new))
+                raise ValueError
             # Prevent errors like true_division
-            if alpha_new == 0: alpha_new = 0.00001
-            elif alpha_new == 1: alpha_new = 0.99999
+            #if alpha_new == 0 or alpha_new == 1: break
+            
 
         # Update thetas
         for l in [1,2,3,4]:
@@ -125,10 +127,13 @@ def EM(X, Theta, ThetaB, alpha, estimate_alpha):
         except Warning:
             raise
         try:
+            #if not lbd1 > 0.001: break
             Theta_new = Theta_new / lbd1   
         except Warning:
             raise 
         # Check if converges
+        if estimate_alpha:
+            if not (alpha_new > 0.0001 and alpha_new < 0.9999): break
         if dtv(Theta_new, ThetaB_new, Theta, ThetaB) < h: break
 
     Theta = Theta_new

@@ -9,7 +9,7 @@ import pandas as pd
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 
-def run_test(init_opt = 'mean', est_alpha = True, param_file = 'params_set.json', iterations = 100):
+def run_test(init_opt = 'mean', est_alpha = True, param_file = 'params_set.json', iterations = 10):
     print('New test started -------------------')
     # Read real data once
     print('Reading params from file ...')
@@ -59,7 +59,7 @@ if __name__ == '__main__':
         0
     )
     Thetas1 = (
-        np.array([[0,1/8,1/8,6/8],[8/10,1/10,1/10,0],[1/7,3/7,3/7,0]]).T, 
+        np.array([[1/8,1/8,1/8,5/8],[7/10,1/10,1/10,1/10],[1/7,2/7,3/7,1/7]]).T, 
         np.array([1/4,1/4,1/4,1/4]), 
         1
     )
@@ -79,9 +79,9 @@ if __name__ == '__main__':
     
     for pair in Theta_pairs:
         # different k
-        for k in [10, 30, 100, 1000, 2000]:
+        for k in [10, 50, 100, 500, 1000, 2000]:
             # different alphas
-            for alpha in [0.1, 0,3, 0.5, 0.7, 0.9]:
+            for alpha in [0.1, 0.7, 0.5, 0.2, 0.9]:
                 # First create new params set
                 save_params_to_json(outfile = 'params_set.json', Theta = pair[0], ThetaB = pair[1], alpha = alpha, k = k)
                 # Then run test with generated params file
