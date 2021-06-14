@@ -11,6 +11,7 @@ def ParseArguments():
     parser.add_argument('--output', default = "estimated_params.json", required = False, help = 'Tutaj zapiszemy wyestymowane parametry  (default: %(default)s)')
     parser.add_argument('--estimate-alpha', default = "no", required=False, help = 'Czy estymowac alpha czy nie?  (default: %(default)s)')
     args, _ = parser.parse_known_args()
+    args.estimate_alpha = True if args.estimate_alpha == 'yes' else False
     return args.input, args.output, args.estimate_alpha
 
 # %% Define dtv
@@ -60,7 +61,6 @@ def init_thetas(X, opt = 'random', **kwargs):
         raise ValueError
     
     return Theta, ThetaB
-
 # %% Define EM
 def EM(X, Theta, ThetaB, alpha, estimate_alpha):
     '''X: data; Theta, ThetaB, alpha: initial values (if estimate_alpha = True, alpha will be ignored)'''
@@ -100,15 +100,10 @@ def EM(X, Theta, ThetaB, alpha, estimate_alpha):
         # Maximization step
         # Update alpha
         lbd1 = np.sum(Q[1])
-        #if lbd1 < 0.000001: break
         if estimate_alpha: 
             alpha_new = lbd1 / np.sum(Q[0] + Q[1])
             if type(alpha_new) not in [float, np.float, np.float32, np.float64]:
-                print(type(alpha_new))
                 raise ValueError
-            # Prevent errors like true_division
-            #if alpha_new == 0 or alpha_new == 1: break
-            
 
         # Update thetas
         for l in [1,2,3,4]:
@@ -127,13 +122,14 @@ def EM(X, Theta, ThetaB, alpha, estimate_alpha):
         except Warning:
             raise
         try:
-            #if not lbd1 > 0.001: break
             Theta_new = Theta_new / lbd1   
         except Warning:
             raise 
-        # Check if converges
+        
+        # Prevent errors
         if estimate_alpha:
             if not (alpha_new > 0.0001 and alpha_new < 0.9999): break
+        # Check if converges
         if dtv(Theta_new, ThetaB_new, Theta, ThetaB) < h: break
 
     Theta = Theta_new
@@ -179,7 +175,7 @@ if __name__ == '__main__':
     X = np.asarray(data['X'])
 
     # Run experiment
-    est_a, est_Th, est_ThB, params = run_experiment(X, 'mean', alpha, estimate_alpha = True, random_iter = 1)
+    est_a, est_Th, est_ThB, params = run_experiment(X, 'uniform', alpha, estimate_alpha = estimate_alpha)
 
     # Extract results and save output
     estimated_params = {
